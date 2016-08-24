@@ -1,10 +1,8 @@
 /****************************************************************************
  * This is a snippet from an old project I made for my Distributed Systems  *
- * course back in 2008 when I was a student at Politecnico di Milano.		*
+ * course back in 2008 when I was a student at Politecnico di Milano.	    *
  * It is a module that implements Diffie-Hellmann key exchange protocol for * 
  * a group chat.															*
- * I'm sorry for the Italian still in the comments, I'll translate them as  *
- * soon as I can.														    *
  ****************************************************************************/
  
 package it.polimi.distsys0708.demo.gdh.groupmember;
@@ -35,71 +33,69 @@ import javax.crypto.SecretKey;
 import javax.crypto.spec.DHParameterSpec;
 
 /**
- * Gestisce la crittografia ed il key agreement all'interno di un {@link GroupMemberImpl}.
- * Le operazioni svolte da questa classe sono:
+ * Manages encryption and key agreement in a {@link GroupMemberImpl}.
+ * The funcionalities implemented by this class are the following:
  * <ul>
- *   <li> Inizializzazione del key agreement con i parametri GDH del gruppo corrente, 
- *        attraverso il metodo {@link #init(GDHParams)};
- *   <li> Esecuzione del protocollo di key agreement attraverso i metodi 
+ *   <li> Key agreement initialization with GDH parameters of the current group, 
+ *        through {@link #init(GDHParams)} method;
+ *   <li> Key agreement protocol execution through methods 
  *        {@link #doUpflow(KAMValues, BigInteger, boolean)}, 
  *        {@link #doDownflow(KAMValues, BigInteger)};
- *   <li> Crittografia dei messaggi in ingresso/uscita attraverso i metodi
- *        {@link #decryptMessage(byte[])} e {@link #encryptMessage(String)}.
+ *   <li> Messages encryption/decryption through methods
+ *        {@link #decryptMessage(byte[])} and {@link #encryptMessage(String)}.
  * </ul>
- * Nota: nella documentazione della classe si fara' riferimento agli oggetti KAMValues
- * come se fossero dei messaggi di key agreement, anche se in realta' ne costituiscono
- * solo una parte (la piu' importante).
+ * Note: in this documentation we will refer to KAMValues objects
+ * like they were key agreement messages, even if they are just a part of them
+ * (although the most important).
  */
 public class CryptoManager {
 	
-	/* Generatore di coppie di chiavi pubblica/privata. */
-	private final KeyPairGenerator key_pair_generator;
+    /* Key pair generator (public/private). */
+    private final KeyPairGenerator key_pair_generator;
 	
-	/* Esecutore del protocollo di key agreement. */
+    /* Key agreement protocol implementation. */
     private final KeyAgreement key_agreement;
     
-    /* Cifrario di input (crittografazione messaggi). */
+    /* Input cipher (message encryption). */
     private Cipher input_cipher;
     
-    /* Cifrario di output (decrittazione messaggi). */
+    /* Output cipher (message decryption). */
     private Cipher output_cipher;
     
-    /* Parametri del protocollo GDH.2 da utilizzare per la crittografia. */
+    /* GDH.2 protocol parameters. */
     private GDHParams gdh_params;
     
-    /* Coppia di chiavi pubblica/privata usata per la crittografia. */
+    /* Public/private key pair. */
     private KeyPair key_pair;
     
-    /* Ultimo messaggio di upflow ricevuto. */
+    /* Last upflow message received. */
     private KAMValues last_upflow_recvd;
 	
-    /* Logger della classe. */
+    /* Class logger. */
     private final Logger logger;
     
 	/**
-	 * Costruttore della classe.
-	 * Ottiene un generatore di coppie di chiavi ed un esecutore del protocollo di
-	 * key agreement per l'algoritmo di Diffie-Hellman.
+	 * Class constructor.
+	 * Get a key pair generator and a key agreement protocol implementation for
+	 * the Diffie-Hellman algorithm.
 	 * 
-	 * @throws NoSuchAlgorithmException se si verifica un errore durante l'ottenimento
-	 *         del generatore di coppie di chiavi e dell'esecutore del key agreement.
+	 * @throws NoSuchAlgorithmException if an error occurs during initialization.
 	 */
 	public CryptoManager() throws NoSuchAlgorithmException {
 		
-		/* Ottiene il logger della classe. */
+		/* Get the class logger. */
 		logger = Logger.getLogger(this.getClass().getName());
 		logger.finest("Logger della classe " + this.getClass().getName() + " pronto.");
 		
-		/* Ottiene un generatore di coppie di chiavi per l'algoritmo Diffie-Hellman. */
+		/* Get the key pair generator for the Diffie-Hellman algorithm. */
 		key_pair_generator = KeyPairGenerator.getInstance("DH");
 		logger.finest("Ottenuto il generatore di coppie di chiavi per Diffie-Hellman.");
 		
-		/* Ottiene una implementazione del protocollo di key agreement per l'algoritmo 
-		 * Diffie-Hellman. */
+		/* Get the implementation of the key agreement for the Diffie-Hellman protocol. */
 		key_agreement = KeyAgreement.getInstance("DH");
 		logger.finest("Ottenuto l'esecutore del protocollo di key agreement per Diffie-Hellman.");
 		
-		/* Questi campi vengono inizializzati successivamente con il metodo init(). */
+		/* These fileds will be initialized later in the init() method. */
 		input_cipher = null;
 		output_cipher = null;
 		gdh_params = null;
@@ -109,19 +105,15 @@ public class CryptoManager {
 	}
 	
 	/**
-	 * Inizializza gli elementi crittografici dipendenti dai parametri GDH del gruppo di
-	 * appartenenza. Un oggetto {@link CryptoManager} deve essere reinizializzato con
-	 * questo metodo tutte le volte che i parametri GDH.2 del gruppo di appartenenza
-	 * cambiano.
-	 * @param gdhp parametri del protocollo GDH.2 con cui inizializzare la crittografia.
-	 * @throws NoSuchAlgorithmException se si verifica un errore durante 
-	           l'inizializzazione degli elementi crittografici.
-	 * @throws NoSuchPaddingException se si verifica un errore durante 
-	           l'inizializzazione degli elementi crittografici.
-	 * @throws InvalidAlgorithmParameterException se si verifica un errore durante 
-	           l'inizializzazione degli elementi crittografici.
-	 * @throws InvalidKeyException se si verifica un errore durante 
-	           l'inizializzazione degli elementi crittografici.
+	 * Initializes cryptographics elements that are dependent from the particular
+	 * GDH parameters used by each group.
+	 * A {@link CryptoManager} must be reinitialized with this method
+	 * each time that group's GDH.2 parameters change.
+	 * @param gdhp GDH.2 protocol parameters for cryptographic initialization.
+	 * @throws NoSuchAlgorithmException if an error occurs during initialization.
+	 * @throws NoSuchPaddingException if an error occurs during initialization.
+	 * @throws InvalidAlgorithmParameterException if an error occurs during initialization.
+	 * @throws InvalidKeyException if an error occurs during initialization.
 	 */
 	public synchronized void init(GDHParams gdhp) throws NoSuchAlgorithmException, NoSuchPaddingException, InvalidAlgorithmParameterException, InvalidKeyException {
 		
@@ -129,45 +121,39 @@ public class CryptoManager {
 		logger.finest("Inizializzazione della crittografia con i seguenti parametri:\n" +
 				gdhp);
 		
-		/* Ottiene i cifrari di input e output associati all'agoritmo di
-		 * cifratura simmetrica specificato nei parametri del GHD.2. */
+		/* Get input/output ciphers for the encryption algorithm
+		 * specified in the GDH.2 parameters. */
 		input_cipher = Cipher.getInstance(gdhp.encryption_algorithm);
 		logger.finest("Ottenuto il cifrario di input.");
 	    output_cipher = Cipher.getInstance(gdhp.encryption_algorithm);
 	    logger.finest("Ottenuto il cifrario di output.");
 		
-	    /* Inizializza il generatore di coppie di chiavi con i parametri
-		 * del GDH.2. */
+	    /* Initializes the key pair generator with the GDH.2 parameters. */
 	    key_pair_generator.initialize(
 				new DHParameterSpec( gdh_params.p, gdh_params.g, gdh_params.l )
 		);
 		logger.finest("Generatore di coppie di chiavi pubblica/privata inizializzato.");
 	    
-	    /* Genera la coppia di chiavi pubblica/privata. */
+	    /* Generates the key pair. */
 		key_pair = key_pair_generator.generateKeyPair();
 		logger.finest("Coppia di chiavi pubblica/privata generata.");
 		
-		/* Inizializza l'esecutore del key agreement con la chiave privata
-		 * appena generata. */
+		/* Initializes the key agreement implementation with the private key. */
 		key_agreement.init(key_pair.getPrivate());
 		logger.finest("Esecutore del key agreement inizializzato con la chiave privata.");
 		
-		/* Dopo ogni inizializzazione, l'ultimo messaggio di upflow ricevuto viene 
-		 * cancellato. */
+		/* After every initialization, the last upflow message received is cleared. */
 		last_upflow_recvd = null;
 		
 	}
 	
 	/**
-	 * Cifra un messaggio usando la chiave simmetrica corrente.
-	 * @param il messaggio in chiaro da cifrare.
-	 * @return un array di byte contenente il messaggio cifrato.
-	 * @throws IllegalBlockSizeException se si verifica un errore durante la cifratura
-	 *         del messaggio.
-	 * @throws BadPaddingException se si verifica un errore durante la cifratura
-	 *         del messaggio.
-	 * @throws IllegalStateException se il cifrario di output non e' stato inizializzato
-	 *         con una chiave simmetrica o non e' stato ancora creato.
+	 * Encrypt a message using the current key.
+	 * @param the message to encrypt.
+	 * @return a byte array containing the encrypted message.
+	 * @throws IllegalBlockSizeException if an error occurs during message encryption.
+	 * @throws BadPaddingException if an error occurs during message encryption.
+	 * @throws IllegalStateException if the output cipher wasn't correctly initialized.
 	 */
 	public synchronized byte[] encryptMessage(String plain_msg) throws IllegalBlockSizeException, BadPaddingException, IllegalStateException {
 		
@@ -179,15 +165,12 @@ public class CryptoManager {
 	}
 	
 	/**
-	 * Decifra un messaggio cifrato usando la chiave simmetrica corrente.
-	 * @param encrypted_msg messaggio cifrato da decifrare.
-	 * @return il messaggio in chiaro.
-	 * @throws IllegalBlockSizeException se si verifica un errore durante la decifratura
-	 *         del messaggio.
-	 * @throws BadPaddingException se si verifica un errore durante la decifratura
-	 *         del messaggio.
-	 * @throws IllegalStateException se il cifrario di inpput non e' stato inizializzato
-	 *         con una chiave simmetrica o non e' stato ancora creato.
+	 * Decrypt a message using the current key. 
+	 * @param encrypted_msg message to decrypt.
+	 * @return the decrypted message.
+	 * @throws IllegalBlockSizeException if an error occurs during message decryption.
+	 * @throws BadPaddingException if an error occurs during message encryption.
+	 * @throws IllegalStateException if the input cipher wasn't correctly initialized.
 	 */
 	public synchronized String decryptMessage(byte[] encrypted_msg) throws IllegalBlockSizeException, BadPaddingException, IllegalStateException {
 		
@@ -199,32 +182,28 @@ public class CryptoManager {
 	}
 	
 	/**
-	 * Effettua un passo della fase di upflow dell'algoritmo di key agreement GHD.2.
-	 * Il passo puo' essere effettuato come:
+	 * Do one step of the upflow phase of the key agreement algorithm GDH.2.
+	 * The step can be executed as:
 	 *  <ul>
-	 *    <li> membro iniziale: viene creato un messaggio di key agreement iniziale, 
-	 *         da passare al membro successivo.
-	 *    <li> membro intermedio: viene creato un messaggio di key agreement intermedio, 
-	 *         a partire dal messaggio precedente. Il nuovo messaggio verra' passato al 
-	 *         membro successivo.
-	 *    <li> membro finale: viene ricavata la chiave di gruppo e viene generato (a 
-	 *         partire dal messaggio precedente) un messaggio di key agreement finale da 
-	 *         inviare in broadcast agli altri membri del gruppo affinche' anch'essi 
-	 *         possano ricavare (in maniera sicura) la medesima chiave di gruppo.
-	 * @param kam messaggio di key agreement precedente. Se <code>null</code>, viene 
-	 *        eseguito il passo iniziale di upflow.
-	 * @param member_id identificativo del membro del gruppo che sta effettuando il passo 
-	 *        corrente di upflow.
-	 * @param last vale <code>true</code> se deve essere effettuato il passo finale di 
-	 *        upflow.
-	 * @return il messaggio di key agreement per il passo successivo.
-	 * @throws InvalidKeyException se si verifica un errore durante la fase di upflow.
-	 * @throws IllegalStateException se si effettua la fase di upflow in uno stato erroneo
-	 *         (ad es. prima di aver generato una coppia di chiavi pubblica/privata).
-	 * @throws NoSuchAlgorithmException se si verifica un errore durante la fase di upflow.
-	 * @throws NullPointerException se <code>member_id</code> e' <code>null</code>.
-	 * @throws IllegalArgumentException se il contenuto di <code>kam</code> non e' adatto
-	 *         ad eseguire la fase di upflow richiesta.
+	 *    <li> first member: creates the initial key agreement message to be sent through
+	 *         the members chain.
+	 *    <li> intermediate member: creates an intermediate key agreement message from the
+	 *         received one. The new message will follow on the memebers chain.
+	 *    <li> last member: the group key is generated and a final key agreement message
+         *         is created. This will be broadcasted to the other group members to allow
+         *         them to generate the same group key.
+	 * @param kam previous key agreement message. If <code>null</code>, the upflow step will
+	          be executed as the first member.
+	 * @param member_id id of the owner of this upflow step.
+	 * @param last <code>true</code> if this is the last upflow step.
+	 * @return the key agreement message for the next step.
+	 * @throws InvalidKeyException if an error occurs during this upflow step.
+	 * @throws IllegalStateException if the step is executed in a cryptographic state not 
+	           correctly initialized (e.g. the key pair was not yet generated).
+	 * @throws NoSuchAlgorithmException if an error occurs during this upflow step.
+	 * @throws NullPointerException if <code>member_id</code> is <code>null</code>.
+	 * @throws IllegalArgumentException if the content of <code>kam</code> is not valid for
+	 *         the current upflow step.
 	 */
 	public synchronized KAMValues doUpflow(KAMValues kam, BigInteger member_id, boolean last) throws InvalidKeyException, IllegalStateException, NoSuchAlgorithmException, NullPointerException, IllegalArgumentException {
 		
@@ -236,24 +215,24 @@ public class CryptoManager {
 					"incompatibili: kam = null e last = true. Il passo di upflow non" +
 					"puo' essere contemporaneament iniziale e finale.");
 		
-		/* Salva l'ultimo messaggio di upflow ricevuto. */
+		/* Saves the last received upflow message. */
 		last_upflow_recvd = (kam != null ? kam.clone() : null);
 		
-		/* Il nuovo messaggio di key agreement. */
+		/* The new key agreement message. */
 		KAMValues result = null;
 		
 		if (!last) {
 			if (kam == null) {
-				/* Inizia la fase di upflow. */
+				/* Starts the upflow phase. */
 				result = startUpflow(member_id);
 			}
 			else {
-				/* Continua la fase di upflow. */
+				/* Continues the upflow phase. */
 				result = continueUpflow(kam, member_id);
 			}
 		}
 		else {
-			/* Termina la fase di upflow. */
+			/* Ends the upflow phase. */
 			if (kam.cardinal_value == null)
 				throw new IllegalArgumentException("Specificato un key agreement message non valido: il valore cardinale e' null.");
 			result = endUpflow(kam, member_id);
@@ -263,45 +242,41 @@ public class CryptoManager {
 	}
 
 	/**
-	 * Rieffettua un passo della fase di upflow dell'algoritmo di key agreement GHD.2.
-	 * Come operazione preliminare, viene generata una nuova coppia di chiavi
-	 * pubblica/privata da usare nel protocollo di key agreement. Se necessario,
-	 * vengono eseguite le opportune azioni per escludere dal key agreement i membri
-	 * specificati.
-	 * Il passo puo' essere effettuato come:
+	 * Redo a step of the upflow phase of the GDH.2 key agreement protocol
+	 * (i.e. when a new member joins or an old member leaves the group).
+	 * As a preliminary step, a new key pair is generated to be used in the
+	 * agreement process. If necessary, the steps in order to exclude the specified
+	 * group members are executed.
+	 * The step can be executed as:
 	 *  <ul>
-	 *    <li> membro intermedio: viene creato un messaggio di key agreement intermedio,
-	 *         a partire dall'ultimo messaggio di upflow ricevuto.
-	 *    <li> membro finale: viene ricavata la chiave di gruppo e viene generato (a 
-	 *         partire dall'ultimo messaggio di upflow ricevuto) un messaggio di key 
-	 *         agreement finale da inviare in broadcast agli altri membri del gruppo 
-	 *         affinche' anch'essi possano ricavare (in maniera sicura) la medesima 
-	 *         chiave di gruppo.
+	 *    <li> intermediate member: creates an intermediate key agreement message from the
+	 *         received one. The new message will follow on the memebers chain.
+	 *    <li> last member: the group key is generated and a final key agreement message
+         *         is created. This will be broadcasted to the other group members to allow
+         *         them to generate the same group key.
 	 *  </ul>
-	 * @param member_id identificativo del membro del gruppo che sta effettuando il passo 
-	 *        corrente di upflow.
-	 * @param last vale <code>true</code> se deve essere effettuato il passo finale di 
-	 *        upflow.
-	 * @param excluded_members un insieme di identificatori di membri del gruppo che
-	 *        devono essere esclusi dalle successive fasi di key agreement. Puo' essere 
-	 *        <code>null</code>.
-	 * @return il messaggio di key agreement per il passo successivo.
-	 * @throws InvalidKeyException se si verifica un errore durante la fase di upflow.
-	 * @throws NoSuchAlgorithmException se si verifica un errore durante la fase di upflow.
-	 * @throws IllegalStateException se si effettua la fase di upflow in uno stato erroneo.
-	 * @throws NullPointerException se <code>member_id</code> e' <code>null</code>.
+	 * @param member_id id of the owner of this upflow step.
+	 * @param last <code>true</code> if this is the last upflow step.
+	 * @param excluded_members a set of group member's id that will be exluded from the
+	 *        next key agreement phases. It can be <code>null</code>.
+	 * @return the key agreement message for the next phase.
+	 * @throws InvalidKeyException if an error occurs during this upflow step.
+	 * @throws IllegalStateException if the step is executed in a cryptographic state not 
+	           correctly initialized (e.g. the key pair was not yet generated).
+	 * @throws NoSuchAlgorithmException if an error occurs during this upflow step.
+	 * @throws NullPointerException if <code>member_id</code> is <code>null</code>.
 	 */
 	public synchronized KAMValues redoUpflow(BigInteger member_id, boolean last, Set<BigInteger> excluded_members) throws InvalidKeyException, IllegalStateException, NoSuchAlgorithmException, NullPointerException {
 		
 		if (member_id == null)
 			throw new NullPointerException("Specificato un id membro non valido: null.");
 		
-		/* Se non e' stato memorizzato nessun messaggio di upflow lancia un'eccezione. */
+		/* If no previous upflow message was received, throws an excpetion. */
 		if (last_upflow_recvd == null) {
 			throw new IllegalStateException("Impossibile rieseguire l'upflow: nessun messaggio di upflow e' stato precedentemente ricevuto.");
 		}
 		
-		/* Esclude eventuali membri del gruppo dalle successive fasi di key agreement. */
+		/* Removes the specified group members from the next key agreement phases. */
 		if (excluded_members != null) {
 			logger.fine("Saranno esclusi dal key agreement i seguenti membri: " + excluded_members);
 			Deque<IntermediateValue> d_tmp = 
@@ -313,25 +288,23 @@ public class CryptoManager {
 		
 		logger.finest("Ultimo messaggio di upflow ricevuto: " + last_upflow_recvd);
 		
-		/* Genera una nuova coppia di chiavi pubblica/privata prima
-		 * di eseguire il passo di upflow. */
+		/* Generates a new key pair before executing the upflow step. */
 		key_pair = key_pair_generator.generateKeyPair();
 		logger.finest("Coppia di chiavi pubblica/privata generata.");
 
-		/* Inizializza l'esecutore del key agreement con la chiave privata
-		 * appena generata. */
+		/* Initializes the key agreement implementation with the private key. */
 		key_agreement.init(key_pair.getPrivate());
 		logger.finest("Esecutore del key agreement inizializzato con la chiave privata.");
 			
-		/* Il nuovo messaggio di key agreement. */
+		/* The new key agreement message. */
 		KAMValues result = null;
 		
 		if (!last) {
-			/* Continua la fase di upflow. */
+			/* Continues the upflow phase. */
 			result = continueUpflow(last_upflow_recvd.clone(), member_id);
 		}
 		else {
-			/* Termina la fase di upflow. */
+			/* Ends the upflow phase. */
 			if (last_upflow_recvd.cardinal_value == null)
 				throw new IllegalStateException("Impossibile effettuare la fase finale " +
 						"di upflow: l'ultimo valore di upflow memorizzato ha un valore " +
@@ -344,20 +317,15 @@ public class CryptoManager {
 	}
 	
 	/**
-	 * Effettua la fase di downflow dell'algoritmo di key agreement GDH.2.
-	 * Questa fase consiste semplicemente nell'ottenere la chiave simmetrica di gruppo
-	 * a partire dal valore cardinale contenuto nel messaggio di key agreement ricevuto.
-	 * @param kam messaggio di key agreement ricevuto.
-	 * @throws InvalidKeyException se si verifica un errore durante il calcolo della
-	 *         chiave simmetrica.
-	 * @throws IllegalStateException se si effettua la fase di downflow in uno stato 
-	 *         erroneo.
-	 * @throws NoSuchAlgorithmException se si verifica un errore durante il calcolo della
-	 *         chiave simmetrica.
-	 * @throws NullPointerException se <code>kam</code> e' <code>null</code>.
-	 * @throws IllegalArgumentException se il contenuto di <code>kam</code> non e' adatto
-	 *         ad eseguire la fase di downflow.
-	 * 
+	 * Do the downflow phase of the GDH.2 key agreement algorithm, i.e. the group key
+	 * is securely generated by each group member using the received key agreement message.
+	 * @param kam the received key agreement message.
+	 * @throws InvalidKeyException if an error occurs during the group key generation.
+	 * @throws IllegalStateException if the downflow step is executed in an invalid cryptographic state.
+	 * @throws NoSuchAlgorithmException if an error occurs during the group key generation.
+	 * @throws NullPointerException if <code>kam</code> is <code>null</code>.
+	 * @throws IllegalArgumentException if the content of <code>kam</code> can't be used to execute
+	 *         the current downflow step.
 	 */
 	public synchronized void doDownflow(KAMValues kam) throws InvalidKeyException, IllegalStateException, NoSuchAlgorithmException, NullPointerException, IllegalArgumentException {
 		
@@ -366,30 +334,25 @@ public class CryptoManager {
 		else if(kam.cardinal_value == null)
 			throw new IllegalArgumentException("Specificato un key agreement message non valido: il valore cardinale e' null.");
 		
-		/* Calcola la nuova chiave simmetrica di gruppo utilizzando il precedente 
-		 * valore cardinale. */
+		/* Computes the new group key. */
 		computeSecretKey(kam.cardinal_value.value);
 		
 	}
 		
 	/**
-	 * Effettua la fase di upflow da membro finale:
-	 * calcola il nuovo insieme di valori intermedi elevando alla chiave privata tutti
-	 * i precedenti valori intermedi, quindi calcola la chiave simmetrica di gruppo usando
-	 * il precedente valore cardinale. I cifrari di I/O vengono inizializzati per l'utilizzo
-	 * della nuova chiave.
+	 * Execute the upflow step as the last member:
+	 * computes the new set of intermediate values by raising to its private key all the previous
+	 * intermediate values, then, computes the group key using the previous cardinal value.
+	 * I/O ciphers are initialized to be used with the new group key.
 	 * @param kam messaggio di key agreement precedente. Se null, viene eseguito il passo
 	 *        iniziale di upflow.
 	 * @param member_id identificativo del membro del gruppo che sta effettuando il passo 
 	 *        corrente di upflow.
-	 * @return il messaggio di key agreement da usare al passo successivo.
-	 * @throws InvalidKeyException se si verifica un errore durante l'esecuzione
-	 *         della fase di upflow.
-	 * @throws IllegalStateException se la fase di upflow e' fatta con uno stato erroneo
-	 *         degli elementi crittografci interessati (ad es. non e' stata generata nessuna
-	 *         coppia di chiavi pubblica/privata).
-	 * @throws NoSuchAlgorithmException se si verifica un errore durante l'esecuzione
-	 *         della fase di upflow.
+	 * @return the key agreement message to be used with the next phase.
+	 * @throws InvalidKeyException if an error occurs during the upflow step.
+	 * @throws IllegalStateException if the step is executed in a cryptographic state not 
+	 *         correctly initialized (e.g. the key pair was not yet generated).
+	 * @throws NoSuchAlgorithmException if an error occurs during the upflow step.
 	 */
 	private KAMValues endUpflow(KAMValues kam, BigInteger member_id) throws InvalidKeyException, IllegalStateException, NoSuchAlgorithmException {
 		
@@ -401,14 +364,13 @@ public class CryptoManager {
 		Key k_tmp;
 		Set<BigInteger> s_tmp;
 		
-		/* Il nuovo insieme di valori intermedi avra' al piu' un elemento in piu' rispetto
-		 * al vecchio insieme. */
+		/* The new intermediate values set will have at most one element more. */
 		Deque<IntermediateValue> new_int_val = 
 			new ArrayDeque<IntermediateValue>(kam.intermediate_values.size()+1);
 
 		if (kam.intermediate_values.size() == 0) {
-			/* Se il vecchio insieme dei valori intermedi e' vuoto, inserisce la propria
-			 * chiave pubblica come nuovo valore intermedio. */
+			/* If there were no previous intermediate values, inserts the public key as new
+			 * intermediate value. */
 			k_tmp = key_pair.getPublic();
 			s_tmp = new HashSet<BigInteger>();
 			s_tmp.add(member_id);
@@ -417,25 +379,23 @@ public class CryptoManager {
 			logger.finer("Aggiunto il nuovo valore intermedio " + iv_tmp);
 		}
 		for (int i = 0; kam.intermediate_values.size() > 0; i++) {
-			/* Estrae un valore intermedio. */
+			/* Get an intermediate value. */
 			iv_tmp = kam.intermediate_values.removeFirst();
 			logger.finer("Estratto il vecchio valore intermedio " + iv_tmp);
-			/* Calcola il nuovo valore intermedio. */
+			/* Computes the new intermediate value. */
 			k_tmp = key_agreement.doPhase(iv_tmp.value, false);
 			s_tmp = new HashSet<BigInteger>(iv_tmp.members);
 			s_tmp.add(member_id);
 			iv_tmp = new IntermediateValue(s_tmp,k_tmp);
-			/* Aggiunge il nuovo valore intermedio al nuovo insieme. */
+			/* Adds the new intermediate value. */
 			new_int_val.addLast(iv_tmp);
 			logger.finer("Aggiunto il nuovo valore intermedio " + iv_tmp);
 		}
 
-		/* Crea il nuovo messaggio di key agreement (non e' previsto un valore
-		 * cardinale). */
+		/* Creates the new key agreement message. */
 		result = new KAMValues(new_int_val, null);
 		
-		/* Calcola la nuova chiave simmetrica di gruppo utilizzando il precedente 
-		 * valore cardinale. */
+		/* Computes the new group key using the previous cardinal value. */
 		computeSecretKey(kam.cardinal_value.value);
 		
 		return result; 
@@ -443,28 +403,26 @@ public class CryptoManager {
 	}
 
 	/**
-	 * Calcola la nuova chiave simmetrica da usare nella comunicazione con gli altri membri
-	 * del gruppo. I cifrari di I/O vengono inizializzati con questa nuova chiave.
-	 * @param card_val valore cardinale da usare per il calcolo della chiave.
-	 * @throws InvalidKeyException
-	 * @throws IllegalStateException
-	 * @throws NoSuchAlgorithmException
+	 * Computes the key to be used by the group members to encrypt/decrypt their messages.
+	 * I/O ciphers will be initialized with this new key.
+	 * @param card_val cardinal value to be used in the computation of the new key.
+	 * @throws InvalidKeyException if an error occurs during the key generation.
+	 * @throws IllegalStateException if an error occurs during the key generation.
+	 * @throws NoSuchAlgorithmException if an error occurs during the key generation.
 	 */
 	private void computeSecretKey(Key card_val) throws InvalidKeyException, IllegalStateException, NoSuchAlgorithmException {
 		
-		/* Calcola il segreto di sessione elevando il precedente valore cardinale
-		 * alla chiave privata. */
+		/* Computes the session secret by raising the cardinal value to the private key. */
 		key_agreement.doPhase(card_val, true);
 		logger.finest("Calcolato il segreto di sessione.");
 		
-		/* Calcola la chiave simmetrica che sara' usata per la comunicazione sicura
-		 * con gli altri membri del gruppo. */
+		/* Actual group key generation. */
 		SecretKey secret_key = key_agreement.generateSecret(gdh_params.encryption_algorithm);
 		logger.fine("Calcolata la nuova chiave simmetrica di gruppo: " + 
 				Integer.toHexString(secret_key.hashCode())+ " (" + 
 				(secret_key.getEncoded().length*8) + "bit)");
 		
-		/* Inizializza i cifrari di input/output con la nuova chiave simmetrica. */
+		/* I/O ciphers generation. */
 		input_cipher.init(Cipher.DECRYPT_MODE, secret_key);
 		logger.finest("Cifrario di input inizializzato con la chiave simmetrica.");
 		output_cipher.init(Cipher.ENCRYPT_MODE, secret_key);
@@ -473,21 +431,16 @@ public class CryptoManager {
 	}
 
 	/**
-	 * Effettua la fase di upflow da membro intermedio:
-	 * calcola il nuovo insieme di valori intermedi elevando alla chiave privata tutti
-	 * i precedenti valori intermedi ed aggiungendo il precedente valore cardinale, quindi
-	 * calcola il nuovo valore cardinale elevando il precedente alla chiave privata.
-	 * @param kam il messaggio contenente i vecchi valori intermedi ed il vecchio
-	 *        valore cardinale.
-	 * @param member_id identificativo del membro del gruppo che sta eseguendo il passo
-	 *        corrente della fase di upflow.
-	 * @return un nuovo messaggio di key agreement con i nuovi valori intermedi e nuovo
-	 *         valore cardinale.
-	 * @throws InvalidKeyException se si verifica un errore durante l'esecuzione
-	 *         della fase di upflow.
-	 * @throws IllegalStateException se si esegue la fase di upflow con uno stato erroneo
-	 *         degli elementi crittografci interessati (ad es. non e' stata generata nessuna
-	 *         coppia di chiavi pubblica/privata).
+	 * Do the upflow phase as an intermediate member:
+	 * computes the new set of intermediate values by raising to its private key all the previous
+	 * intermediate values and adding the previous cardinal value, then, and computes the new
+	 * cardinal value.
+	 * @param kam the previous key agreement message.
+	 * @param member_id id of the owner of this upflow step.
+	 * @return the new key agreement message.
+	 * @throws InvalidKeyException if an error occurs during the upflow step..
+	 * @throws IllegalStateException if the step is executed in a cryptographic state not 
+	 *         correctly initialized (e.g. the key pair was not yet generated).
 	 */
 	private KAMValues continueUpflow(KAMValues kam, BigInteger member_id) throws InvalidKeyException, IllegalStateException {
 		
@@ -498,18 +451,17 @@ public class CryptoManager {
 		Key k_tmp;
 		HashSet<BigInteger> s_tmp;
 		
-		/* Il nuovo insieme di valori intermedi avra' al piu' due elementi in piu' 
-		 * rispetto al vecchio insieme. */
+		/* The new intermediate values set will have at most one element more. */
 		Deque<IntermediateValue> new_int_val = 
 			new ArrayDeque<IntermediateValue>(kam.intermediate_values.size()+2);
 
-		/* Il vecchio valore cardinale diventa uno dei nuovi valori intermedi. */
+		/* The last cardinal value becomes a new intermediate value. */
 		new_int_val.addLast(kam.cardinal_value.clone());
 		logger.finer("Aggiunto il nuovo valore intermedio " + kam.cardinal_value);
 
 		if (kam.intermediate_values.size() == 0) {
-			/* Se il vecchio insieme dei valori intermedi e' vuoto, inserisce la propria
-			 * chiave pubblica come nuovo valore intermedio. */
+			/* If there were no previous intermediate values, inserts the public key as new
+			 * intermediate value. */
 			k_tmp = key_pair.getPublic();
 			s_tmp = new HashSet<BigInteger>();
 			s_tmp.add(member_id);
@@ -518,41 +470,39 @@ public class CryptoManager {
 			logger.finer("Aggiunto il nuovo valore intermedio " + iv_tmp);
 		}
 		for (int i = 0; kam.intermediate_values.size() > 0; i++) {
-			/* Estrae un valore intermedio. */
+			/* Get an intermediate value. */
 			iv_tmp = kam.intermediate_values.removeFirst();
 			logger.finer("Estratto il vecchio valore intermedio " + iv_tmp);
-			/* Calcola il nuovo valore intermedio. */
+			/* Computes the new intermediate value. */
 			k_tmp = key_agreement.doPhase(iv_tmp.value, false);
 			s_tmp = new HashSet<BigInteger>(iv_tmp.members);
 			s_tmp.add(member_id);
 			iv_tmp = new IntermediateValue(s_tmp,k_tmp);
-			/* Aggiunge il nuovo valore intermedio al nuovo insieme. */
+			/* Adds the new intermediate value. */
 			new_int_val.addLast(iv_tmp);
 			logger.finer("Aggiunto il nuovo valore intermedio " + iv_tmp);
 		}
 		
-		/* Calcola il nuovo valore cardinale: e' il vecchio elevato alla chiave
-		 * privata corrente. */
+		/* Computes the new cardinal value: it is the previous one raised to the 
+		 * current private key. */
 		k_tmp = key_agreement.doPhase(kam.cardinal_value.value, false);
 		s_tmp = new HashSet<BigInteger>(kam.cardinal_value.members);
 		s_tmp.add(member_id);
 		iv_tmp = new IntermediateValue(s_tmp, k_tmp);
 		logger.fine("Calcolato il nuovo valore cardinale: " + iv_tmp);
 		
-		/* Crea il nuovo messaggio di key agreement. */
+		/* Creates the new key agreement value. */
 		return new KAMValues(new_int_val, iv_tmp);
 		
 	}
 
 	/**
-	 * Effettua la fase di upflow da membro iniziale:
-	 * l'insieme di valori intermedi e' vuoto, crea il valore cardinale iniziale.
-	 * @param member_id identificativo del membro del gruppo che sta eseguendo il passo
-	 *        corrente della fase di upflow.
-	 * @return il primo messaggio di key agreement.
-	 * @throws IllegalStateException se la fase di upflow e' fatta con uno stato erroneo
-	 *         degli elementi crittografci interessati (ad es. non e' stata generata nessuna
-	 *         coppia di chiavi pubblica/privata).
+	 * Do the upflow phase as the initial member:
+	 * the set of intermediate values is empty, initializes it.
+	 * @param member_id id of the owner of this upflow step.
+	 * @return the initial key agreement message.
+	 * @throws IllegalStateException if the step is executed in a cryptographic state not 
+	 *         correctly initialized (e.g. the key pair was not yet generated).
 	 */
 	private KAMValues startUpflow(BigInteger member_id) throws IllegalStateException {
 		
@@ -563,19 +513,19 @@ public class CryptoManager {
 		Key k_tmp;
 		Set<BigInteger> s_tmp;
 		
-		/* L'insieme dei valori intermedi e' vuoto. */
+		/* Initializes the set of intermediate values. */
 		Deque<IntermediateValue> new_int_val = 
 			new ArrayDeque<IntermediateValue>(0);
 		logger.finer("Nessun valore intermedio da calcolare.");
 		
-		/* Il valore cardinale corrisponde alla chiave pubblica corrente. */
+		/* The initial cardinal value is the current public key. */
 		k_tmp = key_pair.getPublic();
 		s_tmp = new HashSet<BigInteger>();
 		s_tmp.add(member_id);
 		iv_tmp = new IntermediateValue(s_tmp, k_tmp); 
 		logger.finer("Calcolato il nuovo valore cardinale: " + iv_tmp);
 		
-		/* Crea il messaggio di key agreement. */
+		/* Creates the initial key agreement message. */
 		return new KAMValues(new_int_val, iv_tmp);
 		
 	}
